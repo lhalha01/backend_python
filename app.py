@@ -10,6 +10,7 @@ DATABASE = "products.db"
 app = FastAPI(title="Products API")
 
 
+
 def _connect_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DATABASE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
