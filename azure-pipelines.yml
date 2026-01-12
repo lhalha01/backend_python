@@ -18,10 +18,7 @@ variables:
   artifactName: 'backend-python'
   packageFileName: 'app.zip'
 
-  # Deployment (configúralo en tu Pipeline variables o Variable Group)
-  azureServiceConnection: ''
-  webAppName: ''
-  environmentName: 'prod'
+
 
 stages:
   - stage: Build
