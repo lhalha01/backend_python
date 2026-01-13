@@ -106,8 +106,13 @@ stages:
           runOnce:
             deploy:
               steps:
-                - download: current
-                  artifact: '$(artifactName)'
+                - task: DownloadBuildArtifacts@0
+                  displayName: 'Download build artifact $(artifactName)'
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: '$(artifactName)'
+                    downloadPath: '$(Pipeline.Workspace)/artifacts'
 
                 # App Settings recomendados para Zip Deploy + build en App Service (Oryx)
                 - task: AzureAppServiceSettings@1
@@ -142,4 +147,4 @@ stages:
                     appName: '$(webAppName)'
                     runtimeStack: '$(runtimeStack)'
                     startupCommand: '$(startupCommand)'
-                    package: '$(Pipeline.Workspace)/$(artifactName)/$(packageFileName)'
+                    package: '$(Pipeline.Workspace)/artifacts/$(artifactName)/$(packageFileName)'
