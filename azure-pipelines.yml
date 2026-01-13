@@ -23,8 +23,6 @@ variables:
   webAppName: ''
   environmentName: 'prod'
 
-
-
 stages:
   - stage: Build
     displayName: 'Build'
