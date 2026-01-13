@@ -26,12 +26,12 @@ variables:
   startupCommand: 'gunicorn -k uvicorn.workers.UvicornWorker app:app --bind=0.0.0.0:$(websitesPort)'
 
   # Artifacts
-  artifactName: 'backend-python'
+  artifactName: 'backendpython'
   packageFileName: 'app.zip'
 
   # Deployment (configúralo en Variables del pipeline o Variable Group)
   azureServiceConnection: 'LabsConn'
-  webAppName: 'backend-python'
+  webAppName: 'backendpython'
   # Necesario para despliegue a slot + swap
   resourceGroupName: 'AHL_resources'
   slotName: 'staging'
