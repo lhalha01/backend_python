@@ -14,13 +14,27 @@ pool:
 variables:
   pythonVersion: '3.11'
 
+  # App Service
+  # - webAppLinux (recomendado para Python) o webApp (Windows)
+  appType: 'webAppLinux'
+  # Runtime stack para Linux App Service (ajusta si cambias pythonVersion)
+  runtimeStack: 'PYTHON|3.11'
+  # Puerto que expondrá el contenedor en App Service Linux
+  websitesPort: '8000'
+  # Startup command (solo aplica a Linux). Ajusta según tu framework.
+  # FastAPI: gunicorn -k uvicorn.workers.UvicornWorker app:app --bind=0.0.0.0:8000
+  startupCommand: 'gunicorn -k uvicorn.workers.UvicornWorker app:app --bind=0.0.0.0:$(websitesPort)'
+
   # Artifacts
   artifactName: 'backend-python'
   packageFileName: 'app.zip'
 
   # Deployment (configúralo en Variables del pipeline o Variable Group)
-  azureServiceConnection: ''
-  webAppName: ''
+  azureServiceConnection: 'LabsConn'
+  webAppName: 'backend-python'
+  # Necesario para despliegue a slot + swap
+  resourceGroupName: 'AHL_resources'
+  slotName: 'staging'
   environmentName: 'prod'
 
 stages:
@@ -53,9 +67,9 @@ stages:
             displayName: 'Install dependencies'
 
           - script: |
-              python -m compileall -q app.py
-              python -c "import app; print(app.app.title)"
-            displayName: 'Validate syntax & imports'
+              python -m compileall -q .
+              python -c "import importlib; importlib.import_module('app')"
+            displayName: 'Validate syntax & import app'
 
           # Empaquetado para Zip Deploy (App Service)
           - task: CopyFiles@2
@@ -98,10 +112,72 @@ stages:
                 - download: current
                   artifact: '$(artifactName)'
 
-                - task: AzureWebApp@1
-                  displayName: 'Zip Deploy to Web App'
+                - task: AzureCLI@2
+                  displayName: 'Ensure deployment slot exists'
                   inputs:
                     azureSubscription: '$(azureServiceConnection)'
-                    appType: 'webAppLinux'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      set -euo pipefail
+                      echo "Checking slot '$(slotName)' on app '$(webAppName)' (rg: '$(resourceGroupName)')"
+                      if az webapp deployment slot show --resource-group "$(resourceGroupName)" --name "$(webAppName)" --slot "$(slotName)" >/dev/null 2>&1; then
+                        echo "Slot already exists."
+                      else
+                        echo "Creating slot..."
+                        az webapp deployment slot create \
+                          --resource-group "$(resourceGroupName)" \
+                          --name "$(webAppName)" \
+                          --slot "$(slotName)" \
+                          --configuration-source "$(webAppName)"
+                        echo "Slot created."
+                      fi
+
+                # App Settings recomendados para Zip Deploy + build en App Service (Oryx)
+                - task: AzureAppServiceSettings@1
+                  displayName: 'Configure App Service settings (slot)'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
                     appName: '$(webAppName)'
+                    resourceGroupName: '$(resourceGroupName)'
+                    slotName: '$(slotName)'
+                    appSettings: |
+                      [
+                        {
+                          "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                          "value": "true",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "ENABLE_ORYX_BUILD",
+                          "value": "true",
+                          "slotSetting": false
+                        },
+                        {
+                          "name": "WEBSITES_PORT",
+                          "value": "$(websitesPort)",
+                          "slotSetting": false
+                        }
+                      ]
+
+                - task: AzureWebApp@1
+                  displayName: 'Zip Deploy to Slot'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    appType: '$(appType)'
+                    appName: '$(webAppName)'
+                    deployToSlotOrASE: true
+                    resourceGroupName: '$(resourceGroupName)'
+                    slotName: '$(slotName)'
+                    runtimeStack: '$(runtimeStack)'
+                    startupCommand: '$(startupCommand)'
                     package: '$(Pipeline.Workspace)/$(artifactName)/$(packageFileName)'
+
+                - task: AzureAppServiceManage@0
+                  displayName: 'Swap Slot to Production'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    Action: 'Swap Slots'
+                    WebAppName: '$(webAppName)'
+                    ResourceGroupName: '$(resourceGroupName)'
+                    SourceSlot: '$(slotName)'
