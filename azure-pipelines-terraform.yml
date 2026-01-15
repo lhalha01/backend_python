@@ -136,7 +136,12 @@ stages:
 
                 - task: DownloadPipelineArtifact@2
                   displayName: 'Download Terraform Plan'
-                  bash: |
+                  inputs:
+                    buildType: 'current'
+                    artifactName: 'terraform-plan'
+                    targetPath: $(workingDirectory)
+
+                - bash: |
                     wget -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
                     unzip terraform.zip
                     sudo mv terraform /usr/local/bin/
@@ -187,10 +192,5 @@ stages:
                     echo ""
                     echo "2. Run backend pipeline to deploy application to App Service"
                     echo "3. Run frontend pipeline to deploy Angular app to Static Web App"
-                    echo "   - Get API key from Static Web App in Azure Portal"
-                    Write-Host "   - Add as secret variable in azure-pipelines-frontend.yml"
-                    Write-Host ""
-                    Write-Host "2. Run backend pipeline to deploy application to App Service"
-                    Write-Host "3. Run frontend pipeline to deploy Angular app to Static Web App"
-                    Write-Host "##[endgroup]"
+                    echo "##[endgroup]"
                   displayName: 'Post-Deployment Instructions'
