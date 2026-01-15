@@ -49,7 +49,13 @@ stages:
               azureSubscription: $(azureSubscription)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
               inlineScript: |
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_TENANT_ID=$tenantId
+                
                 cd $(workingDirectory)
                 terraform init \
                   -backend-config="resource_group_name=$(backendResourceGroup)" \
@@ -89,7 +95,13 @@ stages:
               azureSubscription: $(azureSubscription)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
               inlineScript: |
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_TENANT_ID=$tenantId
+                
                 cd $(workingDirectory)
                 terraform init \
                   -backend-config="resource_group_name=$(backendResourceGroup)" \
@@ -103,7 +115,13 @@ stages:
               azureSubscription: $(azureSubscription)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
               inlineScript: |
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_TENANT_ID=$tenantId
+                
                 cd $(workingDirectory)
                 terraform plan \
                   -var="resource_group_name=$(resourceGroupName)" \
@@ -142,19 +160,13 @@ stages:
                     targetPath: $(workingDirectory)
 
                 - bash: |
-                    wget -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
-                    unzip terraform.zip
-                    sudo mv terraform /usr/local/bin/
-                    terraform version
-                  displayName: 'Install Terraform'
-
-                - task: AzureCLI@2
-                  displayName: 'Terraform Init'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
-                    scriptLocation: 'inlineScript'
+                    addSpnToEnvironment: true
                     inlineScript: |
+                      export ARM_CLIENT_ID=$servicePrincipalId
+                      export ARM_CLIENT_SECRET=$servicePrincipalKey
+                      export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                      export ARM_TENANT_ID=$tenantId
+                      
                       cd $(workingDirectory)
                       terraform init \
                         -backend-config="resource_group_name=$(backendResourceGroup)" \
@@ -167,6 +179,30 @@ stages:
                   inputs:
                     azureSubscription: $(azureSubscription)
                     scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    addSpnToEnvironment: true
+                    inlineScript: |
+                      export ARM_CLIENT_ID=$servicePrincipalId
+                      export ARM_CLIENT_SECRET=$servicePrincipalKey
+                      export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                      export ARM_TENANT_ID=$tenantId
+                      
+                      cd $(workingDirectory)
+                      terraform apply -auto-approve tfplan
+
+                - task: AzureCLI@2
+                  displayName: 'Terraform Output'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    addSpnToEnvironment: true
+                    inlineScript: |
+                      export ARM_CLIENT_ID=$servicePrincipalId
+                      export ARM_CLIENT_SECRET=$servicePrincipalKey
+                      export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                      export ARM_TENANT_ID=$tenantId
+                      sh'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       cd $(workingDirectory)
