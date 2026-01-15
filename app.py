@@ -1,13 +1,39 @@
 
+import os
 import sqlite3
 from typing import Generator, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 DATABASE = "products.db"
 
 app = FastAPI(title="Products API")
+
+
+def _cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    return [
+        "http://localhost:4200",  # Angular console dev server
+        "http://127.0.0.1:4200",
+        "http://localhost:4300",  # Angular CRUD dev server
+        "http://127.0.0.1:4300",
+        "http://localhost:5173",  # Vite (React) dev server
+        "http://127.0.0.1:5173",
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 

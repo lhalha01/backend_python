@@ -13,6 +13,7 @@ pool:
 
 variables:
   pythonVersion: '3.11'
+  nodeVersion: '18.x'
 
   # App Service
   # - webAppLinux (recomendado para Python) o webApp (Windows)
@@ -28,6 +29,8 @@ variables:
   # Artifacts
   artifactName: 'backendpython'
   packageFileName: 'app.zip'
+  reactArtifactName: 'frontend-react'
+  angularArtifactName: 'frontend-angular'
 
   # Deployment (configúralo en Variables del pipeline o Variable Group)
   azureServiceConnection: 'LabsConn'
@@ -43,6 +46,11 @@ stages:
         steps:
           - checkout: self
             fetchDepth: 1
+
+          - task: NodeTool@0
+            displayName: 'Use Node.js $(nodeVersion)'
+            inputs:
+              versionSpec: '$(nodeVersion)'
 
           - task: UsePythonVersion@0
             displayName: 'Use Python $(pythonVersion)'
@@ -68,6 +76,32 @@ stages:
               python -c "import importlib; importlib.import_module('app')"
             displayName: 'Validate syntax & import app'
 
+          - script: |
+              set -e
+              cd frontend/react-products-console
+              npm install
+              npm run build
+            displayName: 'Build React frontend'
+
+          - script: |
+              set -e
+              cd frontend/angular-products-console
+              npm install
+              npm run build
+            displayName: 'Build Angular frontend'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish React artifact'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/frontend/react-products-console/dist'
+              ArtifactName: '$(reactArtifactName)'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Angular artifact'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/frontend/angular-products-console/dist/angular-products-console'
+              ArtifactName: '$(angularArtifactName)'
+
           # Empaquetado para Zip Deploy (App Service)
           - task: CopyFiles@2
             displayName: 'Stage sources'
@@ -75,6 +109,7 @@ stages:
               SourceFolder: '$(Build.SourcesDirectory)'
               Contents: |
                 **/*
+                !frontend/**
                 !**/__pycache__/**
                 !**/*.pyc
                 !**/.git/**
