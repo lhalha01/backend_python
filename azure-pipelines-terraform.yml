@@ -1,0 +1,184 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infra/terraform/**
+      - azure-pipelines-terraform.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Terraform variables
+  terraformVersion: '1.6.0'
+  workingDirectory: '$(System.DefaultWorkingDirectory)/infra/terraform'
+  
+  # Azure variables - CONFIGURAR EN LA PIPELINE
+  azureSubscription: 'LabsConn'  # Service Connection de Azure
+  resourceGroupName: 'rg-backend-python'
+  location: 'East US'
+  appServiceName: 'backendpython'
+  staticWebAppName: 'pythonSWA'
+  environment: 'prod'
+  
+  # Terraform backend storage - CONFIGURAR SEGUN TU STORAGE ACCOUNT
+  backendStorageAccount: 'tfstatebackendpython'  # Cambiar por tu storage account
+  backendContainerName: 'tfstate'
+  backendKey: 'terraform.tfstate'
+  backendResourceGroup: 'rg-terraform-state'  # RG donde esta el storage account
+
+stages:
+  - stage: TerraformValidate
+    displayName: 'Terraform Validate'
+    jobs:
+      - job: Validate
+        displayName: 'Validate Terraform'
+        steps:
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init (Validation)'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: $(workingDirectory)
+              backendServiceArm: $(azureSubscription)
+              backendAzureRmResourceGroupName: $(backendResourceGroup)
+              backendAzureRmStorageAccountName: $(backendStorageAccount)
+              backendAzureRmContainerName: $(backendContainerName)
+              backendAzureRmKey: $(backendKey)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Validate'
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: $(workingDirectory)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Format Check'
+            inputs:
+              provider: 'azurerm'
+              command: 'custom'
+              workingDirectory: $(workingDirectory)
+              customCommand: 'fmt'
+              commandOptions: '-check -recursive'
+            continueOnError: true
+
+  - stage: TerraformPlan
+    displayName: 'Terraform Plan'
+    dependsOn: TerraformValidate
+    condition: succeeded()
+    jobs:
+      - job: Plan
+        displayName: 'Plan Infrastructure'
+        steps:
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: $(workingDirectory)
+              backendServiceArm: $(azureSubscription)
+              backendAzureRmResourceGroupName: $(backendResourceGroup)
+              backendAzureRmStorageAccountName: $(backendStorageAccount)
+              backendAzureRmContainerName: $(backendContainerName)
+              backendAzureRmKey: $(backendKey)
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Plan'
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: $(workingDirectory)
+              environmentServiceNameAzureRM: $(azureSubscription)
+              commandOptions: >
+                -var="resource_group_name=$(resourceGroupName)"
+                -var="location=$(location)"
+                -var="app_service_name=$(appServiceName)"
+                -var="static_web_app_name=$(staticWebAppName)"
+                -var="environment=$(environment)"
+                -out=tfplan
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Terraform Plan'
+            inputs:
+              targetPath: $(workingDirectory)
+              artifact: 'terraform-plan'
+              publishLocation: 'pipeline'
+
+  - stage: TerraformApply
+    displayName: 'Terraform Apply'
+    dependsOn: TerraformPlan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: ApplyInfrastructure
+        displayName: 'Apply Infrastructure'
+        environment: $(environment)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Terraform Plan'
+                  inputs:
+                    buildType: 'current'
+                    artifactName: 'terraform-plan'
+                    targetPath: $(workingDirectory)
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: $(terraformVersion)
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Init'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'init'
+                    workingDirectory: $(workingDirectory)
+                    backendServiceArm: $(azureSubscription)
+                    backendAzureRmResourceGroupName: $(backendResourceGroup)
+                    backendAzureRmStorageAccountName: $(backendStorageAccount)
+                    backendAzureRmContainerName: $(backendContainerName)
+                    backendAzureRmKey: $(backendKey)
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Apply'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'apply'
+                    workingDirectory: $(workingDirectory)
+                    environmentServiceNameAzureRM: $(azureSubscription)
+                    commandOptions: 'tfplan'
+
+                - task: TerraformTaskV4@4
+                  displayName: 'Terraform Output'
+                  inputs:
+                    provider: 'azurerm'
+                    command: 'output'
+                    workingDirectory: $(workingDirectory)
+
+                - pwsh: |
+                    Write-Host "##[section]Infrastructure Deployed Successfully"
+                    Write-Host "##[group]Next Steps:"
+                    Write-Host "1. Configure AZURE_STATIC_WEB_APPS_API_TOKEN in frontend pipeline:"
+                    Write-Host "   - Get API key from Static Web App in Azure Portal"
+                    Write-Host "   - Add as secret variable in azure-pipelines-frontend.yml"
+                    Write-Host ""
+                    Write-Host "2. Run backend pipeline to deploy application to App Service"
+                    Write-Host "3. Run frontend pipeline to deploy Angular app to Static Web App"
+                    Write-Host "##[endgroup]"
+                  displayName: 'Post-Deployment Instructions'

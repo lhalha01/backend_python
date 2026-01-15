@@ -1,0 +1,93 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - frontend/angular-products-crud/**
+      - azure-pipelines-frontend.yml
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - frontend/angular-products-crud/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  nodeVersion: '18.x'
+
+  # Artifacts
+  angularCrudArtifactName: 'frontend-angular-crud'
+
+  # Deployment
+  azureServiceConnection: 'LabsConn'
+  staticWebAppName: 'pythonSWA'
+  environmentName: 'prod'
+
+stages:
+  - stage: BuildFrontend
+    displayName: 'Build Frontend'
+    jobs:
+      - job: Build
+        displayName: 'Build Angular CRUD'
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - task: NodeTool@0
+            displayName: 'Use Node.js $(nodeVersion)'
+            inputs:
+              versionSpec: '$(nodeVersion)'
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | frontend/angular-products-crud/package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: frontend/angular-products-crud/node_modules
+
+          - script: |
+              set -e
+              cd frontend/angular-products-crud
+              npm install
+              npm run build
+            displayName: 'Build Angular CRUD'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Angular CRUD artifact'
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/frontend/angular-products-crud/dist/angular-products-crud'
+              ArtifactName: '$(angularCrudArtifactName)'
+
+  - stage: DeployFrontend
+    displayName: 'Deploy Frontend'
+    dependsOn: BuildFrontend
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - deployment: DeployToSWA
+        displayName: 'Deploy to Static Web App'
+        environment: '$(environmentName)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadBuildArtifacts@0
+                  displayName: 'Download Angular CRUD artifact'
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: '$(angularCrudArtifactName)'
+                    downloadPath: '$(Pipeline.Workspace)/artifacts'
+
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Static Web App'
+                  inputs:
+                    app_location: '$(Pipeline.Workspace)/artifacts/$(angularCrudArtifactName)'
+                    skip_app_build: true
+                    azure_static_web_apps_api_token: '$(AZURE_STATIC_WEB_APPS_API_TOKEN)'
