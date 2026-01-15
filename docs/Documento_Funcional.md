@@ -1,11 +1,17 @@
-# Documento Funcional
+# Documento Funcional - Backend Python con Frontends
 
 ## Propósito
-Este documento describe el comportamiento funcional del backend de inventario (productos). Está pensado para equipos de producto y QA.
+Este documento describe el comportamiento funcional completo del sistema de gestión de productos, incluyendo el backend API y sus interfaces frontend. Está pensado para equipos de producto, QA y desarrollo.
 
-## Alcance
-- Gestión CRUD de `products` con campos: `id`, `name`, `price`, `stock`.
-- API REST simple usando FastAPI y SQLite.
+## Alcance del Sistema
+- **Backend API**: Gestión CRUD de `products` con campos: `id`, `name`, `price`, `stock`.
+- **API REST**: FastAPI con SQLite como base de datos.
+- **Frontends**: 
+  - React Console (Vite + TypeScript) - Puerto 5173
+  - Angular Console (Standalone) - Puerto 4200  
+  - Angular CRUD (Standalone) - Puerto 4300
+- **Testing**: Suite completa de tests automatizados (Backend + React)
+- **CI/CD**: Azure DevOps Pipelines con infraestructura como código
 
 ## Endpoints
 - GET `/products`
@@ -54,10 +60,51 @@ Este documento describe el comportamiento funcional del backend de inventario (p
 
 ## Interfaces externas
 - No hay integraciones externas en esta versión (solo DB local SQLite).
+- **Frontends disponibles**: 
+  - React Console en `http://localhost:5173`
+  - Angular Console en `http://localhost:4200`
+  - Angular CRUD en `http://localhost:4300`
+
+## Arquitectura de Frontends
+
+### React Console (Puerto 5173)
+- **Tecnología**: React 18 + Vite + TypeScript
+- **Características**:
+  - Interfaz tabbed (Productos / Request manual)
+  - Tema azul/verde
+  - Operaciones CRUD completas
+  - Manejo de errores en tiempo real
+- **Ubicación**: `frontend/react-products-console/`
+
+### Angular Console (Puerto 4200)
+- **Tecnología**: Angular 17 (Standalone Components)
+- **Características**:
+  - Navegación por botones API (GET, POST, PUT, DELETE)
+  - Tema púrpura/rosa con gradientes
+  - Prueba individual de cada endpoint
+  - Formularios reactivos
+- **Ubicación**: `frontend/angular-products-console/`
+
+### Angular CRUD (Puerto 4300)
+- **Tecnología**: Angular 17 (Standalone Components)
+- **Características**:
+  - Vista de tabla con listado de productos
+  - Modal para crear/editar productos
+  - Tema azul/verde
+  - Operaciones CRUD completas con confirmaciones
+- **Ubicación**: `frontend/angular-products-crud/`
 
 ## Consideraciones de seguridad
 - Validar y sanear datos de entrada.
+- CORS configurado para desarrollo (localhost:4200, 4300, 5173).
 - Para producción, proteger endpoints con autenticación y TLS.
+- Variables de entorno para configuración sensible.
+
+## Testing y Calidad
+- **Backend**: 11 tests con pytest cubriendo CRUD, validaciones, errores y CORS
+- **React**: 8 tests con Vitest cubriendo componentes y servicios API
+- **Coverage**: >80% backend, >70% frontend
+- **Documentación**: Tests documentados en `docs/Testing.md`
 
 ## Anexos: Ejemplos con `curl` (PowerShell)
 - Crear:

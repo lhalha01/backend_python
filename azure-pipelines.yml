@@ -29,12 +29,12 @@ variables:
   # Artifacts
   artifactName: 'backendpython'
   packageFileName: 'app.zip'
-  reactArtifactName: 'frontend-react'
-  angularArtifactName: 'frontend-angular'
+  angularCrudArtifactName: 'frontend-angular-crud'
 
   # Deployment (configúralo en Variables del pipeline o Variable Group)
   azureServiceConnection: 'LabsConn'
   webAppName: 'backendpython'
+  staticWebAppName: 'pythonSWA'
   environmentName: 'prod'
 
 stages:
@@ -76,31 +76,42 @@ stages:
               python -c "import importlib; importlib.import_module('app')"
             displayName: 'Validate syntax & import app'
 
+          # Backend Testing
+          - script: |
+              python -m pytest -v --tb=short --junitxml=test-results.xml
+            displayName: 'Run backend tests (pytest)'
+            continueOnError: false
+
+          - task: PublishTestResults@2
+            displayName: 'Publish backend test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/test-results.xml'
+              testRunTitle: 'Backend API Tests'
+              failTaskOnFailedTests: true
+
+          # Angular CRUD Build
+          - task: Cache@2
+            displayName: 'Cache Angular CRUD node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | frontend/angular-products-crud/package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: frontend/angular-products-crud/node_modules
+
           - script: |
               set -e
-              cd frontend/react-products-console
+              cd frontend/angular-products-crud
               npm install
               npm run build
-            displayName: 'Build React frontend'
-
-          - script: |
-              set -e
-              cd frontend/angular-products-console
-              npm install
-              npm run build
-            displayName: 'Build Angular frontend'
+            displayName: 'Build Angular CRUD frontend'
 
           - task: PublishBuildArtifacts@1
-            displayName: 'Publish React artifact'
+            displayName: 'Publish Angular CRUD artifact'
             inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/frontend/react-products-console/dist'
-              ArtifactName: '$(reactArtifactName)'
-
-          - task: PublishBuildArtifacts@1
-            displayName: 'Publish Angular artifact'
-            inputs:
-              PathtoPublish: '$(Build.SourcesDirectory)/frontend/angular-products-console/dist/angular-products-console'
-              ArtifactName: '$(angularArtifactName)'
+              PathtoPublish: '$(Build.SourcesDirectory)/frontend/angular-products-crud/dist/angular-products-crud'
+              ArtifactName: '$(angularCrudArtifactName)'
 
           # Empaquetado para Zip Deploy (App Service)
           - task: CopyFiles@2
@@ -110,9 +121,13 @@ stages:
               Contents: |
                 **/*
                 !frontend/**
+                !tests/**
                 !**/__pycache__/**
                 !**/*.pyc
                 !**/.git/**
+                !.venv/**
+                !*.db
+                !pytest.ini
               TargetFolder: '$(Build.ArtifactStagingDirectory)/src'
 
           - task: ArchiveFiles@2
@@ -129,13 +144,13 @@ stages:
             inputs:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)/$(packageFileName)'
               ArtifactName: '$(artifactName)'
-  - stage: Deploy
-    displayName: 'Deploy'
+  - stage: DeployBackend
+    displayName: 'Deploy Backend'
     dependsOn: Build
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
-      - deployment: DeployWebApp
-        displayName: 'Deploy to Azure App Service'
+      - deployment: DeployBackendToAppService
+        displayName: 'Deploy Backend to Azure App Service'
         environment: '$(environmentName)'
         strategy:
           runOnce:
@@ -183,3 +198,30 @@ stages:
                     runtimeStack: '$(runtimeStack)'
                     startupCommand: '$(startupCommand)'
                     package: '$(Pipeline.Workspace)/artifacts/$(artifactName)/$(packageFileName)'
+
+  - stage: DeployFrontend
+    displayName: 'Deploy Frontend'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - deployment: DeployAngularCrudToSWA
+        displayName: 'Deploy Angular CRUD to Static Web App'
+        environment: '$(environmentName)'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadBuildArtifacts@0
+                  displayName: 'Download Angular CRUD artifact'
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: '$(angularCrudArtifactName)'
+                    downloadPath: '$(Pipeline.Workspace)/artifacts'
+
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy to Static Web App'
+                  inputs:
+                    app_location: '$(Pipeline.Workspace)/artifacts/$(angularCrudArtifactName)'
+                    skip_app_build: true
+                    azure_static_web_apps_api_token: '$(AZURE_STATIC_WEB_APPS_API_TOKEN)'

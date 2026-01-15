@@ -35,8 +35,6 @@ Opción B (recomendada en producción si agregas gunicorn):
 
 Puedes hacerlo desde Azure Portal.
 
-Alternativa (recomendada si quieres automatizar): este repo incluye un pipeline IaC en `azure-pipelines-iac.yml` que crea el Resource Group + App Service Plan + Web App (Linux) y luego despliega el ZIP.
-
 1. Crear un **Resource Group**.
 2. Crear un **App Service Plan**:
    - OS: Linux
@@ -79,21 +77,12 @@ Este repo ya incluye un pipeline en `azure-pipelines.yml` con:
 - Stage **Build**: instala deps, valida imports/sintaxis, genera un ZIP `app.zip` como artefacto.
 - Stage **Deploy**: hace Zip Deploy a App Service (Linux) cuando el build viene de `main` y no es PR.
 
-Si además quieres que el pipeline cree la infraestructura automáticamente, usa `azure-pipelines-iac.yml`.
-
 ### 6.1 Variables requeridas
 
 En Azure DevOps, define estas variables (Pipeline variables o Variable Group):
 - `azureServiceConnection`: nombre del Service Connection de Azure
 - `webAppName`: nombre exacto de la Web App en Azure
 - `environmentName`: nombre del entorno (por defecto `prod`)
-
-Para el pipeline IaC (`azure-pipelines-iac.yml`) además necesitas (o ajustar):
-- `resourceGroupName`
-- `location`
-- `appServicePlanName`
-- `appServicePlanSkuName`
-- `appInsightsName` (si `enableAppInsights=true`)
 
 También puedes dejarlas hardcodeadas en YAML, pero es preferible configurarlas como variables.
 
