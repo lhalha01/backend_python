@@ -61,23 +61,25 @@ stages:
           - task: Cache@2
             displayName: 'Cache pip'
             inputs:
-              key: 'pip | "$(Agent.OS)" | requirements.txt'
+              key: 'pip | "$(Agent.OS)" | backend/requirements.txt'
               restoreKeys: |
                 pip | "$(Agent.OS)"
               path: $(Pipeline.Workspace)/.pip
 
           - script: |
               python -m pip install --upgrade pip
-              python -m pip install --cache-dir $(Pipeline.Workspace)/.pip -r requirements.txt
+              python -m pip install --cache-dir $(Pipeline.Workspace)/.pip -r backend/requirements.txt
             displayName: 'Install dependencies'
 
           - script: |
+              cd backend
               python -m compileall -q .
               python -c "import importlib; importlib.import_module('app')"
             displayName: 'Validate syntax & import app'
 
           # Backend Testing
           - script: |
+              cd backend
               python -m pytest -v --tb=short --junitxml=test-results.xml
             displayName: 'Run backend tests (pytest)'
             continueOnError: false
@@ -87,7 +89,7 @@ stages:
             condition: succeededOrFailed()
             inputs:
               testResultsFormat: 'JUnit'
-              testResultsFiles: '**/test-results.xml'
+              testResultsFiles: 'backend/test-results.xml'
               testRunTitle: 'Backend API Tests'
               failTaskOnFailedTests: true
 
@@ -117,15 +119,13 @@ stages:
           - task: CopyFiles@2
             displayName: 'Stage sources'
             inputs:
-              SourceFolder: '$(Build.SourcesDirectory)'
+              SourceFolder: '$(Build.SourcesDirectory)/backend'
               Contents: |
                 **/*
-                !frontend/**
                 !tests/**
                 !**/__pycache__/**
                 !**/*.pyc
                 !**/.git/**
-                !.venv/**
                 !*.db
                 !pytest.ini
               TargetFolder: '$(Build.ArtifactStagingDirectory)/src'

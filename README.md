@@ -53,6 +53,9 @@ Sistema completo de gestión de productos con API REST en FastAPI y múltiples i
 ### 1. Backend
 
 ```bash
+# Navegar a la carpeta backend
+cd backend
+
 # Crear y activar entorno virtual
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1  # Windows PowerShell
@@ -123,16 +126,14 @@ npm test -- --run
 
 ```
 Backend_Python/
-├── 📄 app.py                           # API FastAPI principal
-├── 📄 requirements.txt                  # Dependencias Python
-├── 📄 pytest.ini                        # Configuración testing
-├── 📄 README.md                         # Este archivo
-├── 🗄️ products.db                       # Base de datos SQLite
-│
-├── 📂 tests/                            # Tests del backend
-│   ├── __init__.py
-│   ├── conftest.py
-│   └── test_api.py                     # 11 tests API
+├── � backend/                          # Backend FastAPI
+│   ├── 📄 app.py                       # API REST principal
+│   ├── 📄 requirements.txt             # Dependencias Python
+│   ├── 📄 pytest.ini                   # Configuración testing
+│   └── 📂 tests/                       # Tests del backend
+│       ├── __init__.py
+│       ├── conftest.py
+│       └── test_api.py                 # 11 tests API
 │
 ├── 📂 frontend/
 │   ├── 📂 react-products-console/      # React + Vite (5173)
