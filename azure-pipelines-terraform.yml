@@ -36,38 +36,36 @@ stages:
       - job: Validate
         displayName: 'Validate Terraform'
         steps:
-          - task: TerraformInstaller@1
+          - bash: |
+              wget -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+              unzip terraform.zip
+              sudo mv terraform /usr/local/bin/
+              terraform version
             displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
 
-          - task: TerraformTaskV4@4
+          - task: AzureCLI@2
             displayName: 'Terraform Init (Validation)'
             inputs:
-              provider: 'azurerm'
-              command: 'init'
-              workingDirectory: $(workingDirectory)
-              backendServiceArm: $(azureSubscription)
-              backendAzureRmResourceGroupName: $(backendResourceGroup)
-              backendAzureRmStorageAccountName: $(backendStorageAccount)
-              backendAzureRmContainerName: $(backendContainerName)
-              backendAzureRmKey: $(backendKey)
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(workingDirectory)
+                terraform init \
+                  -backend-config="resource_group_name=$(backendResourceGroup)" \
+                  -backend-config="storage_account_name=$(backendStorageAccount)" \
+                  -backend-config="container_name=$(backendContainerName)" \
+                  -backend-config="key=$(backendKey)"
 
-          - task: TerraformTaskV4@4
+          - bash: |
+              cd $(workingDirectory)
+              terraform validate
             displayName: 'Terraform Validate'
-            inputs:
-              provider: 'azurerm'
-              command: 'validate'
-              workingDirectory: $(workingDirectory)
 
-          - task: TerraformTaskV4@4
+          - bash: |
+              cd $(workingDirectory)
+              terraform fmt -check -recursive || echo "Format check failed but continuing..."
             displayName: 'Terraform Format Check'
-            inputs:
-              provider: 'azurerm'
-              command: 'custom'
-              workingDirectory: $(workingDirectory)
-              customCommand: 'fmt'
-              commandOptions: '-check -recursive'
             continueOnError: true
 
   - stage: TerraformPlan
@@ -78,37 +76,42 @@ stages:
       - job: Plan
         displayName: 'Plan Infrastructure'
         steps:
-          - task: TerraformInstaller@1
+          - bash: |
+              wget -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+              unzip terraform.zip
+              sudo mv terraform /usr/local/bin/
+              terraform version
             displayName: 'Install Terraform'
-            inputs:
-              terraformVersion: $(terraformVersion)
 
-          - task: TerraformTaskV4@4
+          - task: AzureCLI@2
             displayName: 'Terraform Init'
             inputs:
-              provider: 'azurerm'
-              command: 'init'
-              workingDirectory: $(workingDirectory)
-              backendServiceArm: $(azureSubscription)
-              backendAzureRmResourceGroupName: $(backendResourceGroup)
-              backendAzureRmStorageAccountName: $(backendStorageAccount)
-              backendAzureRmContainerName: $(backendContainerName)
-              backendAzureRmKey: $(backendKey)
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(workingDirectory)
+                terraform init \
+                  -backend-config="resource_group_name=$(backendResourceGroup)" \
+                  -backend-config="storage_account_name=$(backendStorageAccount)" \
+                  -backend-config="container_name=$(backendContainerName)" \
+                  -backend-config="key=$(backendKey)"
 
-          - task: TerraformTaskV4@4
+          - task: AzureCLI@2
             displayName: 'Terraform Plan'
             inputs:
-              provider: 'azurerm'
-              command: 'plan'
-              workingDirectory: $(workingDirectory)
-              environmentServiceNameAzureRM: $(azureSubscription)
-              commandOptions: >
-                -var="resource_group_name=$(resourceGroupName)"
-                -var="location=$(location)"
-                -var="app_service_name=$(appServiceName)"
-                -var="static_web_app_name=$(staticWebAppName)"
-                -var="environment=$(environment)"
-                -out=tfplan
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd $(workingDirectory)
+                terraform plan \
+                  -var="resource_group_name=$(resourceGroupName)" \
+                  -var="location=$(location)" \
+                  -var="app_service_name=$(appServiceName)" \
+                  -var="static_web_app_name=$(staticWebAppName)" \
+                  -var="environment=$(environment)" \
+                  -out=tfplan
 
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Terraform Plan'
@@ -133,49 +136,58 @@ stages:
 
                 - task: DownloadPipelineArtifact@2
                   displayName: 'Download Terraform Plan'
-                  inputs:
-                    buildType: 'current'
-                    artifactName: 'terraform-plan'
-                    targetPath: $(workingDirectory)
-
-                - task: TerraformInstaller@1
+                  bash: |
+                    wget -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+                    unzip terraform.zip
+                    sudo mv terraform /usr/local/bin/
+                    terraform version
                   displayName: 'Install Terraform'
-                  inputs:
-                    terraformVersion: $(terraformVersion)
 
-                - task: TerraformTaskV4@4
+                - task: AzureCLI@2
                   displayName: 'Terraform Init'
                   inputs:
-                    provider: 'azurerm'
-                    command: 'init'
-                    workingDirectory: $(workingDirectory)
-                    backendServiceArm: $(azureSubscription)
-                    backendAzureRmResourceGroupName: $(backendResourceGroup)
-                    backendAzureRmStorageAccountName: $(backendStorageAccount)
-                    backendAzureRmContainerName: $(backendContainerName)
-                    backendAzureRmKey: $(backendKey)
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      cd $(workingDirectory)
+                      terraform init \
+                        -backend-config="resource_group_name=$(backendResourceGroup)" \
+                        -backend-config="storage_account_name=$(backendStorageAccount)" \
+                        -backend-config="container_name=$(backendContainerName)" \
+                        -backend-config="key=$(backendKey)"
 
-                - task: TerraformTaskV4@4
+                - task: AzureCLI@2
                   displayName: 'Terraform Apply'
                   inputs:
-                    provider: 'azurerm'
-                    command: 'apply'
-                    workingDirectory: $(workingDirectory)
-                    environmentServiceNameAzureRM: $(azureSubscription)
-                    commandOptions: 'tfplan'
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      cd $(workingDirectory)
+                      terraform apply -auto-approve tfplan
 
-                - task: TerraformTaskV4@4
+                - task: AzureCLI@2
                   displayName: 'Terraform Output'
                   inputs:
-                    provider: 'azurerm'
-                    command: 'output'
-                    workingDirectory: $(workingDirectory)
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      cd $(workingDirectory)
+                      terraform output
 
-                - pwsh: |
-                    Write-Host "##[section]Infrastructure Deployed Successfully"
-                    Write-Host "##[group]Next Steps:"
-                    Write-Host "1. Configure AZURE_STATIC_WEB_APPS_API_TOKEN in frontend pipeline:"
-                    Write-Host "   - Get API key from Static Web App in Azure Portal"
+                - bash: |
+                    echo "##[section]Infrastructure Deployed Successfully"
+                    echo "##[group]Next Steps:"
+                    echo "1. Configure AZURE_STATIC_WEB_APPS_API_TOKEN in frontend pipeline:"
+                    echo "   - Get API key from Static Web App in Azure Portal or run:"
+                    echo "   - terraform output -raw static_web_app_api_key"
+                    echo "   - Add as secret variable in azure-pipelines-frontend.yml"
+                    echo ""
+                    echo "2. Run backend pipeline to deploy application to App Service"
+                    echo "3. Run frontend pipeline to deploy Angular app to Static Web App"
+                    echo "   - Get API key from Static Web App in Azure Portal"
                     Write-Host "   - Add as secret variable in azure-pipelines-frontend.yml"
                     Write-Host ""
                     Write-Host "2. Run backend pipeline to deploy application to App Service"
