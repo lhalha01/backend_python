@@ -25,3 +25,6 @@ ENV/
 
 # VS Code
 .vscode/
+
+# Azure Pipelines
+azure-pipelines-sinc.yml

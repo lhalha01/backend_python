@@ -1,0 +1,24 @@
+trigger:
+  branches:
+    include:
+      - '*'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: GitHub-Secrets
+
+steps:
+  - checkout: self
+    persistCredentials: true
+    fetchDepth: 0
+
+  - script: |
+
+      BRANCH_NAME=$(Build.SourceBranchName)
+      
+      git push --force https://$(GITHUB_PAT)@github.com/lhalha01/backend_python.git HEAD:refs/heads/$BRANCH_NAME
+
+    displayName: 'Sincronizar Código a GitHub'
+  
