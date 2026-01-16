@@ -17,8 +17,8 @@ variables:
   
   # Azure variables - CONFIGURAR EN LA PIPELINE
   azureSubscription: 'LabsConn'  # Service Connection de Azure
-  resourceGroupName: 'rg-backend-python'
-  location: 'East US'
+  resourceGroupName: 'AHL_resources'
+  location: 'West Europe'
   appServiceName: 'backendpython'
   staticWebAppName: 'pythonSWA'
   environment: 'prod'
@@ -120,8 +120,7 @@ stages:
                 export ARM_CLIENT_ID=$servicePrincipalId
                 export ARM_CLIENT_SECRET=$servicePrincipalKey
                 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-                export ARM_TENANT_ID=$tenantId
-                
+                export ARM_TENANT_ID=$tenantId               
                 cd $(workingDirectory)
                 terraform plan \
                   -var="resource_group_name=$(resourceGroupName)" \
@@ -202,9 +201,6 @@ stages:
                       export ARM_CLIENT_SECRET=$servicePrincipalKey
                       export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
                       export ARM_TENANT_ID=$tenantId
-                      sh'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
                       cd $(workingDirectory)
                       terraform apply -auto-approve tfplan
 
