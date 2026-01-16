@@ -1,0 +1,258 @@
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - infra/terraform/**
+      - azure-pipelines-terraform-v2.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Terraform
+  terraformVersion: '1.6.0'
+  workingDirectory: '$(System.DefaultWorkingDirectory)/infra/terraform'
+  
+  # Azure Service Connection
+  azureSubscription: 'LabsConn'
+  
+  # Infraestructura del Proyecto
+  resourceGroupName: 'AHL_resources'
+  location: 'West Europe'
+  environment: 'prod'
+  
+  # Backend Python FastAPI
+  backendAppServiceName: 'backendpython'
+  backendSku: 'B1'
+  pythonVersion: '3.11'
+  
+  # Frontend Angular CRUD
+  frontendStaticWebApp: 'pythonSWA'
+  frontendSku: 'Free'
+  
+  # Terraform State Backend
+  tfStateStorageAccount: 'tfstatebackendpython'
+  tfStateContainer: 'tfstate'
+  tfStateKey: 'terraform.tfstate'
+  tfStateResourceGroup: 'rg-terraform-state'
+
+stages:
+  # ============================================
+  # Stage 1: Validación de Terraform
+  # ============================================
+  - stage: Validate
+    displayName: 'Validar Configuración'
+    jobs:
+      - job: ValidateTerraform
+        displayName: 'Validar Terraform'
+        steps:
+          - task: Bash@3
+            displayName: 'Instalar Terraform $(terraformVersion)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                wget -q -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+                unzip -q terraform.zip
+                sudo mv terraform /usr/local/bin/
+                terraform version
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Init'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
+              inlineScript: |
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_TENANT_ID=$tenantId
+                
+                cd $(workingDirectory)
+                terraform init \
+                  -backend-config="resource_group_name=$(tfStateResourceGroup)" \
+                  -backend-config="storage_account_name=$(tfStateStorageAccount)" \
+                  -backend-config="container_name=$(tfStateContainer)" \
+                  -backend-config="key=$(tfStateKey)"
+
+          - task: Bash@3
+            displayName: 'Terraform Validate'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: $(workingDirectory)
+              script: |
+                terraform validate
+
+          - task: Bash@3
+            displayName: 'Terraform Format Check'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: $(workingDirectory)
+              script: |
+                terraform fmt -check -recursive || {
+                  echo "⚠️ Formato incorrecto detectado"
+                  exit 1
+                }
+
+  # ============================================
+  # Stage 2: Plan de Infraestructura
+  # ============================================
+  - stage: Plan
+    displayName: 'Planificar Infraestructura'
+    dependsOn: Validate
+    condition: succeeded()
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Generar Plan'
+        steps:
+          - task: Bash@3
+            displayName: 'Instalar Terraform'
+            inputs:
+              targetType: 'inline'
+              script: |
+                wget -q -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+                unzip -q terraform.zip
+                sudo mv terraform /usr/local/bin/
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Init & Plan'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
+              inlineScript: |
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_CLIENT_SECRET=$servicePrincipalKey
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                export ARM_TENANT_ID=$tenantId
+                
+                cd $(workingDirectory)
+                
+                echo "🔄 Inicializando Terraform..."
+                terraform init \
+                  -backend-config="resource_group_name=$(tfStateResourceGroup)" \
+                  -backend-config="storage_account_name=$(tfStateStorageAccount)" \
+                  -backend-config="container_name=$(tfStateContainer)" \
+                  -backend-config="key=$(tfStateKey)"
+                
+                echo ""
+                echo "📋 Generando plan de infraestructura..."
+                terraform plan \
+                  -var="resource_group_name=$(resourceGroupName)" \
+                  -var="location=$(location)" \
+                  -var="app_service_name=$(backendAppServiceName)" \
+                  -var="static_web_app_name=$(frontendStaticWebApp)" \
+                  -var="environment=$(environment)" \
+                  -var="python_version=$(pythonVersion)" \
+                  -var="sku_name=$(backendSku)" \
+                  -var="static_web_app_sku=$(frontendSku)" \
+                  -out=tfplan
+                
+                echo ""
+                echo "✅ Plan generado exitosamente"
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publicar Plan'
+            inputs:
+              targetPath: '$(workingDirectory)/tfplan'
+              artifact: 'terraform-plan'
+              publishLocation: 'pipeline'
+
+  # ============================================
+  # Stage 3: Aplicar Infraestructura
+  # ============================================
+  - stage: Apply
+    displayName: 'Desplegar Infraestructura'
+    dependsOn: Plan
+    condition: succeeded()
+    jobs:
+      - deployment: DeployInfrastructure
+        displayName: 'Aplicar Terraform'
+        environment: 'prod'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: Bash@3
+                  displayName: 'Instalar Terraform'
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      wget -q -O terraform.zip https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+                      unzip -q terraform.zip
+                      sudo mv terraform /usr/local/bin/
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Descargar Plan'
+                  inputs:
+                    artifact: 'terraform-plan'
+                    path: '$(workingDirectory)'
+
+                - task: AzureCLI@2
+                  displayName: 'Terraform Apply'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    addSpnToEnvironment: true
+                    inlineScript: |
+                      export ARM_CLIENT_ID=$servicePrincipalId
+                      export ARM_CLIENT_SECRET=$servicePrincipalKey
+                      export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                      export ARM_TENANT_ID=$tenantId
+                      
+                      cd $(workingDirectory)
+                      
+                      echo "🔄 Inicializando Terraform..."
+                      terraform init \
+                        -backend-config="resource_group_name=$(tfStateResourceGroup)" \
+                        -backend-config="storage_account_name=$(tfStateStorageAccount)" \
+                        -backend-config="container_name=$(tfStateContainer)" \
+                        -backend-config="key=$(tfStateKey)"
+                      
+                      echo ""
+                      echo "🚀 Aplicando plan de infraestructura..."
+                      terraform apply -auto-approve tfplan
+                      
+                      echo ""
+                      echo "✅ Infraestructura desplegada exitosamente"
+
+                - task: AzureCLI@2
+                  displayName: 'Mostrar Outputs'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    addSpnToEnvironment: true
+                    inlineScript: |
+                      export ARM_CLIENT_ID=$servicePrincipalId
+                      export ARM_CLIENT_SECRET=$servicePrincipalKey
+                      export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                      export ARM_TENANT_ID=$tenantId
+                      
+                      cd $(workingDirectory)
+                      
+                      echo ""
+                      echo "📊 Outputs de Terraform:"
+                      echo "════════════════════════════════════════"
+                      terraform output
+                      echo ""
+                      echo "════════════════════════════════════════"
+                      echo ""
+                      echo "🎯 Recursos desplegados:"
+                      echo "  • Resource Group: $(resourceGroupName)"
+                      echo "  • Backend (FastAPI): $(backendAppServiceName).azurewebsites.net"
+                      echo "  • Frontend (Angular): $(frontendStaticWebApp).azurestaticapps.net"
+                      echo ""
+                      echo "📝 Próximos pasos:"
+                      echo "  1. Configurar el backend con: azure-pipelines-backend.yml"
+                      echo "  2. Configurar el frontend con: azure-pipelines-frontend.yml"
+                      echo "  3. Obtener API Token del Static Web App para el frontend pipeline"
+                      echo ""
