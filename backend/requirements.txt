@@ -1,6 +1,4 @@
 fastapi
 gunicorn
 uvicorn[standard]
-pytest
-pytest-asyncio
 httpx
