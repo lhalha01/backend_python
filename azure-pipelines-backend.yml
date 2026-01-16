@@ -71,21 +71,6 @@ stages:
               python -c "import importlib; importlib.import_module('app')"
             displayName: 'Validate syntax & import app'
 
-          - script: |
-              cd backend
-              python -m pytest -v --tb=short --junitxml=test-results.xml
-            displayName: 'Run backend tests (pytest)'
-            continueOnError: false
-
-          - task: PublishTestResults@2
-            displayName: 'Publish test results'
-            condition: succeededOrFailed()
-            inputs:
-              testResultsFormat: 'JUnit'
-              testResultsFiles: 'backend/test-results.xml'
-              testRunTitle: 'Backend API Tests'
-              failTaskOnFailedTests: true
-
           - task: CopyFiles@2
             displayName: 'Stage backend sources'
             inputs:

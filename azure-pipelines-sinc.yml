@@ -17,7 +17,6 @@ steps:
   - script: |
 
       BRANCH_NAME=$(Build.SourceBranchName)
-      
       git push --force https://$(GITHUB_PAT)@github.com/lhalha01/backend_python.git HEAD:refs/heads/$BRANCH_NAME
 
     displayName: 'Sincronizar Código a GitHub'
